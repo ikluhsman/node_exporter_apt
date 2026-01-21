@@ -31,3 +31,19 @@ curl -s http://localhost:9100/metrics | grep node_textfile
 curl -s http://localhost:9100/metrics | grep node_updates
 ```
 
+Metrics
+
+node_updates_pending Number of pending APT package updates
+TYPE node_updates_pending gauge
+
+node_security_updates_pending Number of pending security updates (heuristic)
+TYPE node_security_updates_pending gauge
+
+node_apt_cache_age_seconds Age of the local APT package cache in seconds (-1 if unknown)
+TYPE node_apt_cache_age_seconds gauge
+
+node_patch_check_timestamp Last successful patch check (unix epoch)
+TYPE node_patch_check_timestamp gauge
+
+node_reboot_required Whether a system reboot is required (1 = yes, 0 = no)
+TYPE node_reboot_required gauge

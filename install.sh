@@ -48,6 +48,11 @@ else
   CACHE_AGE=-1
 fi
 
+REBOOT_REQUIRED=0
+if [[ -f /var/run/reboot-required ]]; then
+  REBOOT_REQUIRED=1
+fi
+
 cat >"$TMPFILE" <<METRICS
 # HELP node_updates_pending Number of pending APT package updates
 # TYPE node_updates_pending gauge
@@ -64,6 +69,10 @@ node_apt_cache_age_seconds $CACHE_AGE
 # HELP node_patch_check_timestamp Last successful patch check (unix epoch)
 # TYPE node_patch_check_timestamp gauge
 node_patch_check_timestamp $NOW
+
+# HELP node_reboot_required Whether a system reboot is required (1 = yes, 0 = no)
+# TYPE node_reboot_required gauge
+node_reboot_required $REBOOT_REQUIRED
 METRICS
 
 install -m 0644 "$TMPFILE" "$OUTFILE"
