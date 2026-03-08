@@ -7,32 +7,33 @@ SCRIPT_PATH="/usr/local/bin/node_patch_status.sh"
 SERVICE_PATH="/etc/systemd/system/node-patch-status.service"
 TIMER_PATH="/etc/systemd/system/node-patch-status.timer"
 
-SERVICE_USER="patchcheck"
-SERVICE_GROUP="nodeexp_txt"
+NODE_EXPORTER_USER="${NODE_EXPORTER_USER:-node_exporter}"
+NODE_EXPORTER_GROUP="${NODE_EXPORTER_GROUP:-node_exporter}"
 
 ENABLE_TEXTFILE_COLLECTOR="${ENABLE_TEXTFILE_COLLECTOR:-0}"
 
-echo "==> Installing Prometheus APT patch exporter (group-writable model)"
+echo "==> Installing Prometheus APT patch exporter"
 
-### 1. Ensure group exists
-if ! getent group "$SERVICE_GROUP" >/dev/null; then
-  echo "ERROR: Required group '$SERVICE_GROUP' does not exist."
+### 1. Ensure node_exporter user/group exist
+if ! id "$NODE_EXPORTER_USER" &>/dev/null; then
+  echo "ERROR: User '$NODE_EXPORTER_USER' does not exist."
+  echo "       Create it first, or set NODE_EXPORTER_USER= to the correct user."
+  exit 1
+fi
+if ! getent group "$NODE_EXPORTER_GROUP" >/dev/null; then
+  echo "ERROR: Group '$NODE_EXPORTER_GROUP' does not exist."
+  echo "       Create it first, or set NODE_EXPORTER_GROUP= to the correct group."
   exit 1
 fi
 
-### 2. Ensure service user exists
-if ! id "$SERVICE_USER" &>/dev/null; then
-  useradd -r -s /usr/sbin/nologin -g "$SERVICE_GROUP" "$SERVICE_USER"
-fi
-
-### 3. Ensure textfile collector directory exists (non-destructive)
+### 2. Ensure textfile collector directory exists (non-destructive)
 if [[ ! -d "$EXPORTER_DIR" ]]; then
   mkdir -p "$EXPORTER_DIR"
-  chgrp "$SERVICE_GROUP" "$EXPORTER_DIR"
-  chmod 2770 "$EXPORTER_DIR"   # setgid + group write
+  chown "$NODE_EXPORTER_USER:$NODE_EXPORTER_GROUP" "$EXPORTER_DIR"
+  chmod 750 "$EXPORTER_DIR"
 fi
 
-### 4. Exporter script
+### 3. Exporter script
 cat >"$SCRIPT_PATH" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -51,8 +52,9 @@ fi
 
 TMPFILE="$(mktemp "${OUTDIR}/.node_patch_status.XXXXXX")"
 
-UPDATES=$(apt-get -s upgrade 2>/dev/null | awk '/^Inst / { c++ } END { print c+0 }')
-SECURITY=$(apt-get -s upgrade 2>/dev/null | grep -ci security || true)
+APT_OUTPUT=$(apt-get -s upgrade 2>/dev/null || true)
+UPDATES=$(echo "$APT_OUTPUT" | awk '/^Inst / { c++ } END { print c+0 }')
+SECURITY=$(echo "$APT_OUTPUT" | grep -ci security || true)
 
 STAMP_FILE="/var/lib/apt/periodic/update-success-stamp"
 if [[ -r "$STAMP_FILE" ]]; then
@@ -87,13 +89,13 @@ node_patch_check_timestamp $NOW
 node_reboot_required $REBOOT_REQUIRED
 METRICS
 
-chmod 750 "$TMPFILE"
+chmod 640 "$TMPFILE"
 mv -f "$TMPFILE" "$OUTFILE"
 EOF
 
 chmod 755 "$SCRIPT_PATH"
 
-### 5. systemd service
+### 4. systemd service
 cat >"$SERVICE_PATH" <<EOF
 [Unit]
 Description=Export APT patch status for Prometheus
@@ -101,8 +103,8 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=$SERVICE_USER
-Group=$SERVICE_GROUP
+User=$NODE_EXPORTER_USER
+Group=$NODE_EXPORTER_GROUP
 ExecStart=$SCRIPT_PATH
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -111,7 +113,7 @@ PrivateTmp=true
 ReadWritePaths=$EXPORTER_DIR
 EOF
 
-### 6. Timer
+### 5. Timer
 cat >"$TIMER_PATH" <<'EOF'
 [Unit]
 Description=Run APT patch status exporter every 30 minutes
@@ -125,12 +127,12 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-### 7. OPTIONAL: enable textfile collector
+### 6. OPTIONAL: enable textfile collector
 if [[ "$ENABLE_TEXTFILE_COLLECTOR" == "1" ]]; then
   systemctl edit node_exporter <<EOF
 [Service]
 ExecStart=
-ExecStart=/usr/local/bin/node_exporter \
+ExecStart=/opt/node_exporter/node_exporter \
   --collector.systemd \
   --collector.processes \
   --collector.textfile.directory=$EXPORTER_DIR
@@ -140,10 +142,9 @@ EOF
   systemctl restart node_exporter
 fi
 
-### 8. Enable + run
+### 7. Enable + run
 systemctl daemon-reload
 systemctl enable --now node-patch-status.timer
 systemctl start node-patch-status.service
 
 echo "==> Installation complete"
-
