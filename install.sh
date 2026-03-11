@@ -37,12 +37,10 @@ DROPIN
   systemctl daemon-reload
 fi
 
-### 2. Ensure textfile collector directory exists (non-destructive)
-if [[ ! -d "$EXPORTER_DIR" ]]; then
-  mkdir -p "$EXPORTER_DIR"
-  chown "$NODE_EXPORTER_USER:$NODE_EXPORTER_GROUP" "$EXPORTER_DIR"
-  chmod 750 "$EXPORTER_DIR"
-fi
+### 2. Ensure textfile collector directory exists with correct permissions
+mkdir -p "$EXPORTER_DIR"
+chown "$NODE_EXPORTER_USER:$NODE_EXPORTER_GROUP" "$EXPORTER_DIR"
+chmod 750 "$EXPORTER_DIR"
 
 ### 3. Exporter script
 cat >"$SCRIPT_PATH" <<'EOF'
