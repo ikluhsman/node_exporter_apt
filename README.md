@@ -4,24 +4,40 @@ This is a Prometheus node_exporter addon that enables three metrics scraped from
 
 The installation assumes:
 
-- node_exporter is installed and running
+- node_exporter is installed via apt and running
 - uses APT simulation, non-root
-- use systemd timer + hardened service
+- uses systemd timer + hardened service
 - safe to re-run on-the-fly
 - intentionally simple and operationally boring
 
-Install:
+## Install
 
-Run install.sh but you'll need to update the /etc/systemd/system/node_exporter.service file ExecStart adding this:
+Run as root:
+
+```
+sudo bash install.sh
+```
+
+The script will:
+
+- Create the `node_exporter` system user and group if they don't exist
+- If `node_exporter.service` is present, write a systemd drop-in
+  (`/etc/systemd/system/node_exporter.service.d/user.conf`) so node_exporter
+  runs as the `node_exporter` user
+- Create `/var/lib/node_exporter/textfile_collector` with correct ownership
+
+To also enable the textfile collector in node_exporter automatically:
+
+```
+sudo ENABLE_TEXTFILE_COLLECTOR=1 bash install.sh
+```
+
+This adds `--collector.textfile.directory` to the node_exporter ExecStart via
+`systemctl edit` and restarts the service. If you prefer to do it manually,
+add the following flag to the node_exporter ExecStart:
 
 ```
 --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
-```
-
-Optionally, run with the flag and node_exporter service file will be updated automagically:
-
-```
-sudo ENABLE_TEXTFILE_COLLECTOR=1 bash install-node-patch-exporter.sh
 ```
 
 Verify metrics are being published:
