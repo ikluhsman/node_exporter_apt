@@ -14,16 +14,27 @@ ENABLE_TEXTFILE_COLLECTOR="${ENABLE_TEXTFILE_COLLECTOR:-0}"
 
 echo "==> Installing Prometheus APT patch exporter"
 
-### 1. Ensure node_exporter user/group exist
-if ! id "$NODE_EXPORTER_USER" &>/dev/null; then
-  echo "ERROR: User '$NODE_EXPORTER_USER' does not exist."
-  echo "       Create it first, or set NODE_EXPORTER_USER= to the correct user."
-  exit 1
-fi
+### 1. Ensure node_exporter user/group exist (create if missing)
 if ! getent group "$NODE_EXPORTER_GROUP" >/dev/null; then
-  echo "ERROR: Group '$NODE_EXPORTER_GROUP' does not exist."
-  echo "       Create it first, or set NODE_EXPORTER_GROUP= to the correct group."
-  exit 1
+  echo "==> Creating group '$NODE_EXPORTER_GROUP'"
+  groupadd --system "$NODE_EXPORTER_GROUP"
+fi
+if ! id "$NODE_EXPORTER_USER" &>/dev/null; then
+  echo "==> Creating user '$NODE_EXPORTER_USER'"
+  useradd --system --no-create-home --shell /usr/sbin/nologin \
+    --gid "$NODE_EXPORTER_GROUP" "$NODE_EXPORTER_USER"
+fi
+
+### 1a. Patch the apt-installed node_exporter.service to run as this user
+if systemctl cat node_exporter &>/dev/null; then
+  echo "==> Configuring node_exporter.service to run as '$NODE_EXPORTER_USER'"
+  mkdir -p /etc/systemd/system/node_exporter.service.d
+  cat >/etc/systemd/system/node_exporter.service.d/user.conf <<DROPIN
+[Service]
+User=$NODE_EXPORTER_USER
+Group=$NODE_EXPORTER_GROUP
+DROPIN
+  systemctl daemon-reload
 fi
 
 ### 2. Ensure textfile collector directory exists (non-destructive)
