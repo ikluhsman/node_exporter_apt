@@ -24,7 +24,7 @@ The script will:
 - If `node_exporter.service` is present, write a systemd drop-in
   (`/etc/systemd/system/node_exporter.service.d/user.conf`) so node_exporter
   runs as the `node_exporter` user
-- Create `/var/lib/node_exporter/textfile_collector` with correct ownership
+- Create `/var/lib/node_exporter/textfile_collector` and enforce `node_exporter:node_exporter` ownership and `750` permissions on every run
 
 To also enable the textfile collector in node_exporter automatically:
 
